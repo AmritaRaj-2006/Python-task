@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Python Debugger UI</title>
+  <style>
+    /* Tailwind CDN */
+  </style>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+  <div class="max-w-3xl w-full bg-white rounded-lg shadow-md p-8">
+    <h1 class="text-3xl font-bold text-gray-900 mb-6">Python Debugger</h1>
+
+    <label for="code" class="block mb-2 font-semibold text-gray-700">Enter Python Code:</label>
+    <textarea
+      id="code"
+      rows="10"
+      placeholder="Paste your Python code here..."
+      class="w-full p-3 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+    ></textarea>
+
+    <label for="error" class="block mt-6 mb-2 font-semibold text-gray-700">Paste Error Message (optional):</label>
+    <textarea
+      id="error"
+      rows="4"
+      placeholder="Paste error message here if available..."
+      class="w-full p-3 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+    ></textarea>
+
+    <div class="flex items-center mt-6 space-x-4">
+      <button
+        id="debug-btn"
+        class="bg-blue-600 text-white font-semibold py-3 px-8 rounded-full hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"
+      >
+        Debug
+      </button>
+
+      <button
+        id="clear-button"
+        class="bg-gray-500 text-white font-semibold py-3 px-8 rounded-full hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+      >
+        Clear
+      </button>
+
+      <label class="flex items-center space-x-2 ml-auto">
+        <input type="checkbox" id="mode-toggle" class="form-checkbox h-5 w-5 text-blue-600" />
+        <span class="text-gray-700 font-medium">Show Solution</span>
+      </label>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loading" class="hidden mt-6 flex items-center space-x-2 text-gray-700">
+      <svg class="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle
+          class="opacity-25"
+          cx="12"
+          cy="12"
+          r="10"
+          stroke="currentColor"
+          stroke-width="4"
+        ></circle>
+        <path
+          class="opacity-75"
+          fill="currentColor"
+          d="M4 12a8 8 0 018-8v8H4z"
+        ></path>
+      </svg>
+      <span>Debugging your code...</span>
+    </div>
+
+    <!-- Response Container -->
+    <div
+      id="response-container"
+      class="hidden mt-6 bg-gray-50 border border-gray-300 rounded-md p-4"
+    >
+      <h2 class="text-xl font-semibold text-gray-800">Response</h2>
+      <div id="response-body" class="mt-2 text-gray-700 whitespace-pre-wrap"></div>
+    </div>
+  </div>
+
+  <script>
+    const codeTextarea = document.getElementById("code");
+    const errorTextarea = document.getElementById("error");
+    const debugButton = document.getElementById("debug-btn");
+    const clearButton = document.getElementById("clear-button");
+    const responseContainer = document.getElementById("response-container");
+    const responseBody = document.getElementById("response-body");
+    const loadingIndicator = document.getElementById("loading");
+    const modeToggle = document.getElementById("mode-toggle");
+
+    debugButton.addEventListener("click", debugCode);
+    clearButton.addEventListener("click", clearInputs);
+
+    async function debugCode() {
+      const code = codeTextarea.value.trim();
+      const error_message = errorTextarea.value.trim();
+
+      if (!code) {
+        responseBody.textContent = "Please enter some Python code to debug.";
+        responseContainer.classList.remove("hidden");
+        loadingIndicator.classList.add("hidden");
+        return;
+      }
+
+      debugButton.disabled = true;
+      loadingIndicator.classList.remove("hidden");
+      responseContainer.classList.add("hidden");
+
+      try {
+        const response = await fetch("http://localhost:3000/debug", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            code: code,
+            error: error_message,
+            mode: modeToggle.checked ? "solution" : "hint",
+          }),
+        });
+
+        const data = await response.json();
+
+        if (data.response) {
+          responseBody.innerHTML = "";
+
+          if (modeToggle.checked) {
+            // Solution Mode: parse code block if exists
+            const codeBlockMatch = data.response.match(/```python([\s\S]*?)```/);
+
+            if (codeBlockMatch) {
+              const explanation = data.response.replace(codeBlockMatch[0], "").trim();
+              const codeBlock = codeBlockMatch[1];
+
+              responseBody.innerHTML = `
+                <p class="mt-4 text-gray-700 leading-relaxed">${escapeHtml(explanation).replace(/\n/g, "<br>")}</p>
+                <div class="mt-4 flex justify-between items-center">
+                  <h4 class="text-md font-semibold text-gray-800">Corrected Code:</h4>
+                  <button onclick="copyCode()" class="btn-copy flex items-center space-x-1 text-blue-600 hover:text-blue-800">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M8 2a2 2 0 00-2 2v2a2 2 0 002 2h4a2 2 0 002-2V4a2 2 0 00-2-2H8z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M3 8a2 2 0 012-2v2a4 4 0 004 4h4a4 4 0 004-4v-2a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+                    </svg>
+                    <span>Copy</span>
+                  </button>
+                </div>
+                <pre class="mt-2 bg-gray-100 rounded-md p-4 overflow-auto">${escapeHtml(codeBlock)}</pre>
+              `;
+            } else {
+              // No code block found, just show text
+              responseBody.innerHTML = `<p class="mt-4 text-gray-700 leading-relaxed">${escapeHtml(data.response).replace(/\n/g, "<br>")}</p>`;
+            }
+          } else {
+            // Hint mode: just show hint nicely formatted
+            responseBody.innerHTML = `<p class="mt-4 text-gray-700 leading-relaxed">${escapeHtml(data.response).replace(/\n/g, "<br>")}</p>`;
+          }
+
+          responseContainer.classList.remove("hidden");
+        } else {
+          responseBody.textContent = "Sorry, no response from server.";
+          responseContainer.classList.remove("hidden");
+        }
+      } catch (error) {
+        console.error("Fetch error:", error);
+        responseBody.textContent = "An error occurred. Please check the console.";
+        responseContainer.classList.remove("hidden");
+      } finally {
+        loadingIndicator.classList.add("hidden");
+        debugButton.disabled = false;
+      }
+    }
+
+    function clearInputs() {
+      codeTextarea.value = "";
+      errorTextarea.value = "";
+      responseBody.textContent = "";
+      responseContainer.classList.add("hidden");
+      loadingIndicator.classList.add("hidden");
+    }
+
+    function copyCode() {
+      const pre = responseBody.querySelector("pre");
+      if (!pre) return;
+
+      navigator.clipboard.writeText(pre.textContent)
+        .then(() => alert("Corrected code copied to clipboard!"))
+        .catch(() => alert("Failed to copy code."));
+    }
+
+    // Basic HTML escape helper to prevent issues in innerHTML
+    function escapeHtml(text) {
+      const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;',
+      };
+      return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+    }
+  </script>
+</body>
+</html>

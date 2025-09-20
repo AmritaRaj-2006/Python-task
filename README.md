@@ -9,4 +9,4 @@ Write a natural-language prompt that will be given to an AI assistant (like Chat
 
 Analyze a student’s buggy Python code
 Offer helpful suggestions or hints
-Avoid giving away the correct solution
+Avoid giving away the correct solution.
